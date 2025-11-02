@@ -39,6 +39,8 @@ export async function middleware(request: NextRequest) {
     "/login",
     "/auth/callback",
     "/auth/auth-code-error",
+    "/nutzungsbedingungen",
+    "/haftungsausschluss",
   ];
 
   const isPublicRoute = publicRoutes.some(
