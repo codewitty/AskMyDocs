@@ -125,44 +125,8 @@ Do not invent or assume any details.
 - ✅ Multiple concurrent document uploads
 - ✅ Conversation persistence per document
 - ✅ One-click reset for documents and conversations
-- 🐳 Docker-ready with `Dockerfile` and `docker-compose.yml`
 
----
 
-## 🧰 Local Setup
-
-### 1. Clone & Install
-
-```bash
-git clone https://github.com/<your-handle>/genai-doc-chatbot.git
-cd genai-doc-chatbot
-pnpm install
-```
-
-### 2. Environment Variables
-
-Create `.env.local`:
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-OPENAI_API_KEY=...
-```
-
-### 3. Run Locally
-
-```bash
-pnpm run dev
-```
-
-### 4. Optional: Docker
-
-```bash
-docker compose up --build
-```
-
----
 
 ## 🧪 Example Interaction
 
@@ -201,9 +165,3 @@ CHUNK 2: "All payments must be made via ACH in USD."
 - Add conversation summarization and semantic search
 
 ---
-
-## 📹 Submission Artifacts
-
-- 🎥 `walkthrough.mp4`: 5-minute code and demo explanation
-- 📄 `README.md`: Implementation overview and prompt strategy
-- 🔗 (Optional) Live demo deployed on Vercel
