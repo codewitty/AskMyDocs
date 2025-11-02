@@ -2,10 +2,8 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useChat } from "@/contexts/ChatContext";
-import { Attachment, ConsensusResponse } from "@/types/chat";
-import { MultiModelSelector } from "./MultiModelSelector";
+import { Attachment } from "@/types/chat";
 import { AttachmentList } from "./AttachmentList";
-import { ChatModeToggle } from "./ChatModeToggle";
 import { ModelSelector } from "./ModelSelector";
 import { FileUploadButton } from "./FileUploadButton";
 import { SendButton } from "./SendButton";
@@ -47,10 +45,6 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [isConsensusMode, setIsConsensusMode] = useState(false);
-  const [selectedModels, setSelectedModels] = useState<string[]>([]);
-  const [isMultiModelSelectorOpen, setIsMultiModelSelectorOpen] =
-    useState(false);
   const [useDocs, setUseDocs] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,42 +69,10 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
 
   useEffect(() => {
     if (activeConversation && activeConversation.model) {
-      // Check if this is a consensus conversation
-      if (activeConversation.model.startsWith("consensus:")) {
-        setIsConsensusMode(true);
-        // Extract the models from the consensus string
-        const modelsString = activeConversation.model.replace("consensus:", "");
-        const models = modelsString ? modelsString.split(",") : [];
-        setSelectedModels(models);
-      } else {
-        setIsConsensusMode(false);
-        setSelectedModel(activeConversation.model);
-      }
+      setSelectedModel(activeConversation.model);
     } else {
-      // Reset to defaults for new conversations
-      setIsConsensusMode(false);
-      // Load last used model from localStorage for new conversations
       const lastUsedModel = localStorage.getItem("lastUsedModel");
       setSelectedModel(lastUsedModel || "openai/o3-mini");
-
-      // Load last used consensus models from localStorage
-      const lastUsedConsensusModels = localStorage.getItem(
-        "lastUsedConsensusModels",
-      );
-      if (lastUsedConsensusModels) {
-        try {
-          const models = JSON.parse(lastUsedConsensusModels);
-          if (Array.isArray(models) && models.length > 0) {
-            setSelectedModels(models);
-          } else {
-            setSelectedModels([]);
-          }
-        } catch {
-          setSelectedModels([]);
-        }
-      } else {
-        setSelectedModels([]);
-      }
     }
   }, [activeConversation]);
 
@@ -135,16 +97,6 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
       }
     }
   }, [selectedModel, attachments]);
-
-  // Save selected consensus models to localStorage when they change
-  useEffect(() => {
-    if (selectedModels.length > 0 && !activeConversation) {
-      localStorage.setItem(
-        "lastUsedConsensusModels",
-        JSON.stringify(selectedModels),
-      );
-    }
-  }, [selectedModels, activeConversation]);
 
   // Save selected model to localStorage when it changes
   useEffect(() => {
@@ -229,7 +181,16 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
       });
 
       // If using RAG over user's documents, call the RAG endpoint (non-streaming)
-      if (useDocs && !isConsensusMode) {
+      if (useDocs) {
+        try {
+          if (conversationId) {
+            await fetch(`/api/conversations/${conversationId}/messages`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ role: "user", content: userMessage }),
+            });
+          }
+        } catch {}
         const res = await fetch("/api/chat/rag", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -242,8 +203,19 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
           throw new Error("Failed to get RAG answer");
         }
 
-        const data = await res.json();
-        const sources = (data.sources || []) as {
+        let data: any = {};
+        try {
+          data = await res.json();
+        } catch (e) {
+          data = {};
+        }
+
+        const rawAnswer = (data?.answer ?? "").toString();
+        const safeAnswer = rawAnswer.trim().length
+          ? rawAnswer
+          : "I'm sorry, I don't have information about that.";
+
+        const sources = (Array.isArray(data?.sources) ? data.sources : []) as {
           document_id: string;
           chunk_id: string;
         }[];
@@ -255,9 +227,22 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
               )
               .join("\n")}`
           : "";
-        const finalContent = `${data.answer || ""}${citationBlock}`;
+
+        const finalContent = `${safeAnswer}${citationBlock}`;
         if (assistantMessageId)
           finalizeMessage(assistantMessageId, finalContent);
+        try {
+          if (conversationId) {
+            await fetch(`/api/conversations/${conversationId}/messages`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                role: "assistant",
+                content: finalContent,
+              }),
+            });
+          }
+        } catch {}
         return; // Skip normal chat flow
       }
 
@@ -392,272 +377,6 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
     }
   };
 
-  const handleConsensusSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (
-      (!message.trim() && attachments.length === 0) ||
-      isLoading ||
-      selectedModels.length === 0
-    )
-      return;
-
-    const userMessage = message;
-    const messageAttachments = [...attachments];
-    setMessage("");
-    setIsLoading(true);
-
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
-
-    let conversationId: string | null = null;
-    let userMessageId: string | undefined;
-    let assistantMessageId: string | undefined;
-    let isNewConversation = false;
-
-    try {
-      if (activeConversation) {
-        conversationId = activeConversation.id;
-      } else {
-        isNewConversation = true;
-        const createConversationResponse = await fetch("/api/conversations", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title: "New Chat",
-            model: `consensus:${selectedModels.join(",")}`,
-          }),
-        });
-
-        if (!createConversationResponse.ok) {
-          throw new Error("Failed to create conversation");
-        }
-
-        const conversationData = await createConversationResponse.json();
-        conversationId = conversationData.conversation.id;
-
-        // FIRST: Add the new conversation to the list
-        addNewConversation(conversationData.conversation);
-
-        // SECOND: Set active conversation and update URL BEFORE adding messages
-        setActiveConversation(conversationData.conversation);
-        window.history.pushState(null, "", `/chat/${conversationId}`);
-
-        // Small delay to ensure state is properly updated
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-
-      // Add optimistic messages only after conversation is properly set
-      userMessageId = addOptimisticMessage({
-        conversation_id: conversationId!,
-        role: "user",
-        content: userMessage,
-        attachments: messageAttachments,
-      });
-
-      assistantMessageId = addOptimisticMessage({
-        conversation_id: conversationId!,
-        role: "assistant",
-        content: "",
-        isLoading: true,
-        isConsensus: true,
-        consensusResponses: selectedModels.map((model) => ({
-          model,
-          content: "",
-          isLoading: true,
-          responseTime: 0,
-        })),
-      });
-      const response = await fetch("/api/chat/consensus", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: userMessage,
-          models: selectedModels,
-          conversationId: conversationId,
-          attachments: messageAttachments,
-        }),
-      });
-
-      if (!response.ok) {
-        if (userMessageId) removeOptimisticMessage(userMessageId);
-        if (assistantMessageId) removeOptimisticMessage(assistantMessageId);
-        throw new Error("Failed to send consensus message");
-      }
-
-      if (!response.body) {
-        if (userMessageId) removeOptimisticMessage(userMessageId);
-        if (assistantMessageId) removeOptimisticMessage(assistantMessageId);
-        throw new Error("No response body");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let consensusResponses: ConsensusResponse[] = selectedModels.map(
-        (model) => ({
-          model,
-          content: "",
-          isLoading: true,
-          responseTime: 0,
-        }),
-      );
-
-      let hasStartedStreaming = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            if (data === "[DONE]") continue;
-
-            try {
-              const parsed = JSON.parse(data);
-
-              if (parsed.type === "consensus_update" && assistantMessageId) {
-                const { modelIndex, content } = parsed;
-                if (modelIndex < consensusResponses.length) {
-                  consensusResponses[modelIndex] = {
-                    ...consensusResponses[modelIndex],
-                    content,
-                    isStreaming: true,
-                    isLoading: false,
-                  };
-
-                  hasStartedStreaming = true;
-                  updateStreamingMessage(
-                    assistantMessageId,
-                    JSON.stringify(consensusResponses),
-                  );
-                }
-              } else if (
-                parsed.type === "consensus_complete" &&
-                assistantMessageId
-              ) {
-                const { modelIndex, content, responseTime } = parsed;
-                if (modelIndex < consensusResponses.length) {
-                  consensusResponses[modelIndex] = {
-                    ...consensusResponses[modelIndex],
-                    content,
-                    isStreaming: false,
-                    isLoading: false,
-                    responseTime,
-                  };
-
-                  updateStreamingMessage(
-                    assistantMessageId,
-                    JSON.stringify(consensusResponses),
-                  );
-                }
-              } else if (
-                parsed.type === "consensus_error" &&
-                assistantMessageId
-              ) {
-                const { modelIndex, error, responseTime } = parsed;
-                if (modelIndex < consensusResponses.length) {
-                  consensusResponses[modelIndex] = {
-                    ...consensusResponses[modelIndex],
-                    error,
-                    isLoading: false,
-                    isStreaming: false,
-                    responseTime,
-                  };
-
-                  updateStreamingMessage(
-                    assistantMessageId,
-                    JSON.stringify(consensusResponses),
-                  );
-                }
-              } else if (
-                parsed.type === "title_update" &&
-                parsed.conversationId &&
-                parsed.title
-              ) {
-                // Handle title update for consensus - update conversation title without switching chats
-                updateConversationTitle(parsed.conversationId, parsed.title);
-              } else if (
-                parsed.type === "consensus_final" &&
-                assistantMessageId
-              ) {
-                finalizeMessage(
-                  assistantMessageId,
-                  JSON.stringify(parsed.responses),
-                );
-              }
-            } catch (e) {
-              console.error(
-                "Error parsing consensus streaming data:",
-                e,
-                "Data:",
-                data,
-              );
-            }
-          }
-        }
-      }
-
-      // Fallback: if streaming never started and we have an assistant message, finalize it
-      if (!hasStartedStreaming && assistantMessageId) {
-        finalizeMessage(assistantMessageId, JSON.stringify(consensusResponses));
-      }
-    } catch (error) {
-      console.error("Error sending consensus message:", error);
-
-      if (assistantMessageId) {
-        let errorMessage = "An unexpected error occurred";
-        if (error instanceof Error) {
-          errorMessage = error.message;
-        }
-
-        finalizeMessage(assistantMessageId, `❌ **Error**: ${errorMessage}`);
-
-        // Try to save error to database for new conversations
-        if (conversationId && isNewConversation) {
-          try {
-            await fetch(`/api/conversations/${conversationId}/messages`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                role: "assistant",
-                content: `❌ **Error**: ${errorMessage}`,
-              }),
-            });
-          } catch (dbError) {
-            console.error("Failed to save error message to database:", dbError);
-          }
-        }
-      } else {
-        if (userMessageId) {
-          removeOptimisticMessage(userMessageId);
-        }
-
-        let errorMessage = "Failed to send consensus message";
-        if (error instanceof Error) {
-          errorMessage = error.message;
-        }
-        alert(`Error: ${errorMessage}`);
-      }
-    } finally {
-      setIsLoading(false);
-      setAttachments([]);
-
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-        }
-      }, 100);
-    }
-  };
-
   const handleFileSelect = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -752,10 +471,7 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
 
       <div className="px-4 pb-4 flex justify-center">
         <div className="w-full max-w-4xl glass-strong backdrop-blur-xl rounded-2xl border border-white/10 p-4 shadow-xl">
-          <form
-            onSubmit={isConsensusMode ? handleConsensusSubmit : handleSubmit}
-            className="w-full"
-          >
+          <form onSubmit={handleSubmit} className="w-full">
             <AttachmentList
               attachments={attachments}
               onRemoveAttachment={removeAttachment}
@@ -773,11 +489,7 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    if (isConsensusMode) {
-                      handleConsensusSubmit(e);
-                    } else {
-                      handleSubmit(e);
-                    }
+                    handleSubmit(e);
                   }
                 }}
               />
@@ -794,9 +506,7 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
                 <SendButton
                   isLoading={isLoading}
                   isDisabled={
-                    (!message.trim() && attachments.length === 0) ||
-                    isLoading ||
-                    (isConsensusMode && selectedModels.length === 0)
+                    (!message.trim() && attachments.length === 0) || isLoading
                   }
                 />
               </div>
@@ -815,45 +525,28 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
               </label>
             </div>
 
-            <ChatModeToggle
-              isConsensusMode={isConsensusMode}
-              selectedModels={selectedModels}
-              selectedModel={selectedModel}
-              isLoading={isLoading}
-              activeConversation={activeConversation}
-              onConsenusModeToggle={() => {
-                setIsConsensusMode(!isConsensusMode);
-                if (!isConsensusMode && selectedModels.length === 0) {
-                  // Load last used consensus models from localStorage
-                  const lastUsedConsensusModels = localStorage.getItem(
-                    "lastUsedConsensusModels",
-                  );
-                  if (lastUsedConsensusModels) {
-                    try {
-                      const models = JSON.parse(lastUsedConsensusModels);
-                      if (Array.isArray(models) && models.length > 0) {
-                        setSelectedModels(models);
-                      }
-                    } catch {
-                      // If parsing fails, don't set any models
-                    }
-                  }
-                }
-              }}
-              onMultiModelSelectorOpen={() => setIsMultiModelSelectorOpen(true)}
-              onSingleModelSelectorOpen={() => setIsModelModalOpen(true)}
-              formatModelName={formatModelName}
-            />
+            <button
+              type="button"
+              onClick={() => setIsModelModalOpen(true)}
+              disabled={isLoading || activeConversation !== null}
+              className={`inline-flex items-center gap-2 px-3 py-2 border border-white/10 rounded-xl text-sm transition-all ${
+                activeConversation !== null
+                  ? "cursor-not-allowed opacity-50 text-white/40"
+                  : "cursor-pointer glass-hover text-white/80 hover:text-white hover:scale-[1.02]"
+              } ${isLoading || activeConversation !== null ? "opacity-50" : ""}`}
+              title={
+                activeConversation !== null
+                  ? "Model locked for existing conversation"
+                  : "Change model"
+              }
+            >
+              <span>{formatModelName(selectedModel).name}</span>
+            </button>
           </div>
         </div>
       </div>
 
-      <MultiModelSelector
-        selectedModels={selectedModels}
-        onModelsChange={setSelectedModels}
-        isOpen={isMultiModelSelectorOpen}
-        onClose={() => setIsMultiModelSelectorOpen(false)}
-      />
+      {/* MultiModelSelector removed */}
     </>
   );
 }
