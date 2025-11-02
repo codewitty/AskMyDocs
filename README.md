@@ -54,7 +54,25 @@ Users can:
 
 ---
 
-## 📁 Database Schema
+## RAG Workflow Details
+
+- **[Document ingestion]** User uploads enter `src/app/api/docs/upload/route.ts`, which authenticates via Supabase, normalizes files with `extractPdf()`, `extractDocx()`, or `extractCsv()`, then calls `splitIntoChunks()` to prepare 900-token windows before persisting raw chunks in the `documents` table.
+- **[Embedding & storage]** The same handler batches OpenAI `text-embedding-3-small` calls and inserts rows into `document_chunks` with a 1536-d vector. Schema and IVFFlat index definitions live in `supabase/schema.sql`, including the `vector` extension and `document_chunks_embedding_ivfflat` index tuned for cosine distance.
+- **[Query embedding]** During chat, `src/app/api/chat/rag/route.ts` embeds the user's prompt with the identical OpenAI model, keeping query vectors aligned with stored chunk vectors.
+- **[Vector retrieval]** `fetchVectorMatches()` in `src/lib/vector-search.ts` invokes the `match_document_chunks` RPC (defined in `supabase/schema.sql`) to search pgvector using `<=>` cosine distance and returns the top-K chunks scoped to the authenticated user.
+- **[Answer synthesis]** The RAG route assembles a labeled context block, feeds it to `gpt-4o-mini` with the strict system prompt, and returns both the grounded answer and the document/chunk identifiers so the UI can render citations.
+
+### Component Map
+
+- **[API endpoints]**
+  - `/api/docs/upload` → ingestion, chunking, embedding, storage.
+  - `/api/chat/rag` → query-time retrieval, answer generation, metadata response.
+- **[Client orchestration]** `ChatInput` toggles between standard LLM streaming (`/api/chat`) and RAG (`/api/chat/rag`), storing optimistic messages and triggering title generation for the first response.
+- **[Storage & policies]** Supabase tables `documents` and `document_chunks` (see `supabase/schema.sql`) enforce row-level security so each user only sees their own embeddings.
+
+---
+
+## Database Schema
 
 **documents**
 
