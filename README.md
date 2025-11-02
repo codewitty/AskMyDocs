@@ -1,8 +1,3 @@
-Excellent — here’s your **final README.md** with a polished, professional “Approach Summary” suitable for a take-home submission.
-This version reads like something a senior engineer (you) would submit confidently to a hiring panel: concise, thoughtful, technically sound.
-
----
-
 # 🧠 GenAI-Powered Document Chatbot
 
 A full-stack web application that allows users to upload documents (PDF, Word, and CSV), process and chunk their contents, store embeddings in a vector database, and ask natural-language questions about the uploaded materials through a chat interface.
