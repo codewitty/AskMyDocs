@@ -243,6 +243,27 @@ export function ChatInput({ quickActionPrompt }: ChatInputProps = {}) {
             });
           }
         } catch {}
+
+        try {
+          if (isNewConversation && conversationId) {
+            const titleRes = await fetch("/api/generate-title", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userMessage,
+                assistantResponse: finalContent,
+                conversationId,
+              }),
+            });
+
+            if (titleRes.ok) {
+              const titleData = await titleRes.json();
+              updateConversationTitle(conversationId, titleData.title);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to generate title for RAG chat:", e);
+        }
         return; // Skip normal chat flow
       }
 

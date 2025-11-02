@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "AskMyDocs",
-  description: "A t3.chat clone, submission for the t3-cloneathon",
+  description: "An AI chatbot with RAG capabilities ",
 };
 
 export default function RootLayout({
