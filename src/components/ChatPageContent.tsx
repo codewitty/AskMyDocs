@@ -104,7 +104,7 @@ export function ChatPageContent({ chatId }: ChatPageContentProps) {
             transition={{ delay: 0.2 }}
             className="text-2xl font-bold text-white mb-4"
           >
-            Welcome to RAG Chat
+            Welcome to AskMyDocs Chat
           </motion.h1>
 
           <motion.p

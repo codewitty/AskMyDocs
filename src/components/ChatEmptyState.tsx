@@ -93,12 +93,12 @@ export function ChatEmptyState({ onQuickAction }: ChatEmptyStateProps) {
         </div>
 
         <h3 className="text-2xl font-bold text-white mb-4">
-          Welcome to RAG Chat
+          Welcome to AskMyDocs Chat
         </h3>
 
         <p className="text-white/60 leading-relaxed mb-8">
-          Start a new conversation using OpenAI models. Choose your preferred
-          model and begin chatting!
+          You can ask questions about your documents here or use the quick
+          actions below to get started chatting with an OpenAI model.
         </p>
 
         {/* Quick Actions */}
