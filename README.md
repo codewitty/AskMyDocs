@@ -121,8 +121,6 @@ Do not invent or assume any details.
 - ✅ Conversation persistence per document
 - ✅ One-click reset for documents and conversations
 
-
-
 ## 🧪 Example Interaction
 
 **User:**
