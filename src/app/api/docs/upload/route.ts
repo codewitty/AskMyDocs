@@ -10,6 +10,36 @@ import OpenAI from "openai";
 
 export const runtime = "nodejs";
 
+function sanitizeFilename(filename: string) {
+  const trimmed = filename.trim();
+  const withoutPath = trimmed.split("/").pop()?.split("\\").pop() || trimmed;
+  const parts = withoutPath.split(".");
+  const extension = parts.length > 1 ? parts.pop() : "";
+  const baseName = parts.join(".") || "document";
+
+  const normalizedBase = baseName
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const safeBase = normalizedBase
+    .replace(/[^a-zA-Z0-9\-_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 100);
+
+  const finalBase = safeBase || "document";
+  const safeExtension = extension
+    ? extension
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .slice(0, 16)
+    : "";
+
+  return safeExtension
+    ? `${finalBase}.${safeExtension.toLowerCase()}`
+    : finalBase;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabase();
@@ -30,7 +60,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const path = `docs/${user.id}/${crypto.randomUUID()}-${file.name}`;
+    const sanitizedName = sanitizeFilename(file.name);
+    const path = `docs/${user.id}/${crypto.randomUUID()}-${sanitizedName}`;
     const { error: uploadErr } = await supabase.storage
       .from("docs")
       .upload(path, file, { upsert: false });

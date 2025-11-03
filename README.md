@@ -135,7 +135,7 @@ Do not invent or assume any details.
 ## 🔐 Bonus Features
 
 - ✅ User authentication and per-user document isolation
-- ✅ Multiple concurrent document uploads
+- ✅ Document uploads with automatic storage-safe filenames
 - ✅ Conversation persistence per document
 - ✅ One-click reset for documents and conversations
 
