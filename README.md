@@ -134,12 +134,36 @@ Do not invent or assume any details.
 
 ## 🔐 Bonus Features
 
-- ✅ User authentication and per-user document isolation
-- ✅ Document uploads with automatic storage-safe filenames
-- ✅ Conversation persistence per document
-- ✅ One-click reset for documents and conversations
+- User authentication and per-user document isolation
+- Document uploads with automatic storage-safe filenames
+- Conversation persistence per document
+- One-click reset for documents and conversations
 
-## 🧪 Example Interaction
+---
+
+## Local Development
+
+- **[Clone & install]**
+  - `git clone https://github.com/codewitty/AskMyDocs.git`
+  - `cd AskMyDocs`
+  - `npm install`
+- **[Configure environment]**
+  - Copy `.env.example` to `.env.local`
+  - Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from your Supabase project
+  - Set `OPENAI_API_KEY` for embeddings and chat completions
+- **[Database schema]**
+  - In Supabase SQL editor, run the statements in `supabase/schema.sql`
+- **[Run locally]**
+  - `npm run dev`
+  - Open `http://localhost:3000`
+- **[Login]**
+  - Use Supabase email/password or OAuth auth flows configured for your project
+- **[Uploading docs]**
+  - Upload one file at a time (PDF, DOCX, or CSV); filenames are sanitized before storage
+
+---
+
+## Example Interaction
 
 **User:**
 
