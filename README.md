@@ -201,4 +201,4 @@ CHUNK 2: "All payments must be made via ACH in USD."
 
 ---
 ## 🎬 Code Walkthrough
-[ Code Walkthrough Video (YouTube)]([https://youtu.be/abcd1234](https://youtu.be/eOuLlEjO4wM))
+[ Code Walkthrough Video (YouTube)]([https://youtu.be/abcd1234](https://youtu.be/eOuLlEjO4wM])
